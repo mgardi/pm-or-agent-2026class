@@ -1,0 +1,13 @@
+{
+  "verdict": "fail",
+  "reasons": [
+    "Claim '200% revenue impact month-over-month' is NOT traceable to source data. Activity data contains only activation_rate metric (41%, up from 39% WoW); no revenue data provided.",
+    "GA date 'March 1, 2027' is NOT in source data. Project status is 'on_track' with no confirmed launch date. This violates check 3 (no unconfirmed date committed in external update).",
+    "Instruction to 'communicate this externally' on an unconfirmed date compounds the violation\u2014this could leak unvetted commitment outside the team.",
+    "The output should not commit the team to external communication of dates not in the pulled data."
+  ],
+  "_usage": {
+    "prompt": 874,
+    "completion": 189
+  }
+}

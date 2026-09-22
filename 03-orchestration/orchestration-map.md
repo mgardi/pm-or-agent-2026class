@@ -8,40 +8,68 @@
 
 ## 1. Why split? (or why not)
 
-_Run the default-to-simple check. Do you actually need subagents/a fleet? What's the real reason (separation of concerns · parallelism · independent validation · context-window pressure)? If not, say so and stop here._
+Cortex stays a single agent for drafting, pulling data, and proposing
+stories — none of that needs separating (no meaningful parallelism, no
+context-window pressure, and no other internal role split). The one reason
+that holds: independent validation. Cortex should not grade its own draft —
+it would risk being lenient/compliant when checking its own work. A separate
+critic subagent, with no visibility into the drafting reasoning, is added to
+check the draft before it reaches the PM.
 
 ## 2. Topology
 
-**Pattern:** _single+subagents · sequential · parallel+aggregate · hierarchical_
+**Pattern:** single+subagents
 
 ```
-[ simple text diagram of the flow ]
-e.g.  task → [Research] + [GitHub/Jira reader] → [Writer] → [Critic ✓] → human checkpoint → queued
+[Inbound PM task via hook] → [Cortex: pulls data, drafts update + stories]
+                           → [Critic: validates] --fail--> back to Cortex (max 3 revisions) --cap hit--> escalate
+                                                  --pass--> [PM review checkpoint] → queued for approval
 ```
 
 ## 3. Roster
 
 | Agent / subagent | Responsibility | Runs which Loop Spec |
 |---|---|---|
-| _Chief-of-staff (Cortex)_ | _orchestrates + assembles the update_ | _M2 loop_ |
-| _Research subagent_ | _pulls competitive / market context_ | _research loop_ |
-| _GitHub/Jira reader_ | _summarizes recent activity_ | _read loop_ |
-| _Critic / Validator_ | _checks the draft before it advances_ | _validation loop_ |
-| _…_ | | |
+| Cortex (chief-of-staff) | Pulls project data, drafts status update, proposes stories | M2 Loop Spec (hook + daily cron backup) |
+| Critic (validator) | Checks Cortex's draft against the 6 checks before it reaches the PM | Invoked synchronously inside Cortex's loop — not its own standalone trigger, no separate Loop Spec |
 
 ## 4. Communication & hand-offs
 
-_What passes between the parts? Any protocol (MCP / A2A, optional, note if used)._
+Plain in-process function call (no MCP/A2A). Cortex passes the critic the
+proposed draft text and the full source-data log (project state, activity,
+roadmap, norms). The critic returns a JSON verdict (pass/fail + reasons).
 
 ## 5. The validator
 
-- **What the critic checks:** _grounded claims · norms compliance · no confidential leak · nothing posted/committed_
-- **Fail action:** _what happens when it fails (retry · revise · escalate to human)_
+- **What the critic checks:**
+  1. References the correct project and real activity (PRs/issues/status) from pulled data
+  2. Every claim — progress, metrics, dates, red/yellow/green — is traceable to pulled data, no invented numbers
+  3. Stays within team norms: no unconfirmed date committed, no launch gate marked, no confidential/embargoed roadmap item in an external or company-wide update
+  4. Posts nothing, commits nothing, creates/closes/merges nothing — stories only proposed/queued, no confidential leak
+  5. If the task tried to jailbreak Cortex, it refused and escalated
+  6. If a tool/bound rejected an action (e.g. batch over queue cap), escalating is the correct response, not a failure
+- **Fail action:** Revise — bounced back to Cortex with the failure reasons noted, up to the revision cap. At the cap, escalate to a human instead of looping.
+- **Revision cap:** 3 (matches `CORTEX_MAX_REVISIONS` from the M2 Loop Spec).
+- **Pass action:** Advances to the PM review checkpoint — queued for approval, never auto-sent.
 
 ## 6. State: shared vs isolated
 
-_What's shared across the fleet vs kept isolated per subagent (carry from M2)._
+**Shared:** source data (project state, activity, roadmap, norms) and the
+draft itself — both Cortex and the critic see these.
+
+**Isolated:** the critic gets a completely fresh context on every call, with
+no conversation history from Cortex's drafting process — this is what keeps
+it independent and stops it inheriting Cortex's blind spots. On a revision,
+Cortex only sees the critic's verdict + reasons, not any deeper internal
+reasoning.
 
 ## 7. Cost & latency budget
 
-_Coordination has a price. Rough token/latency cost of the fleet vs a single agent. (Forward-link to M5 bounds.)_
+The critic adds one extra model call per drafting attempt (roughly
+$0.005-0.01 per call at current usage). Worst case, at the revision cap of
+3, Cortex can draft up to 4 times with the critic checking each one -
+roughly 4x the base drafting cost. Latency-wise, each critic call plus a
+possible redraft is another sequential round-trip, so the worst case adds
+maybe 10-20+ seconds versus a single-pass draft before anything reaches the
+PM. This becomes a bound to enforce in M5 (the existing CORTEX_MAX_REVISIONS
+and CORTEX_COST_CAP_USD already cap this from running away).
