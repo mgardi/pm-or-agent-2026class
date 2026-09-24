@@ -23,7 +23,7 @@ Real screenshots of *your* Cortex running. These are the `00-build/CORTEX-ANATOM
 |---|---|---|---|
 | 1 | _[img]_ | happy-path run: a real drafted update + the HITL checkpoint (queued, not posted) | M2 |
 | 2 | _[img]_ | the critic rejecting a bad draft (revise/block) | M3 |
-| 3 | _[img]_ | a grounded update citing pulled activity + a caught hallucination | M4 |
+| 3 | [`00-build/screenshots/m4-grounded-run-trace.txt`](../00-build/screenshots/m4-grounded-run-trace.txt) + [`m4-withheld-source-trace.txt`](../00-build/screenshots/m4-withheld-source-trace.txt) | Grounded run citing pulled activity (43% activation, PR #820/#823) on the ingested data pack; withheld-source probe (missing-data fixture) shows Cortex refusing to invent data for a nonexistent project and escalating instead | M4 |
 | 4 | _[img]_ | jailbreak refused + escalated | M5 |
 | 5 | _[img]_ | an iteration/cost/queue bound halting a runaway | M5 |
 | 6 | _[img]_ | end-to-end run | M6 |
